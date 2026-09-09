@@ -1,0 +1,617 @@
+from datetime import datetime
+from typing import Any
+from uuid import UUID
+
+from fastapi import HTTPException, status
+from sqlmodel import Session
+
+from dto.employeeDto import (
+    EmployeeAdminUpdateRequest,
+    EmployeeCreateRequest,
+    EmployeeHierarchyNode,
+    EmployeeManagerAssignmentRequest,
+    EmployeeManagerUpdateRequest,
+    EmployeePublicResponse,
+    EmployeeSelfUpdateRequest,
+)
+from models.employee import Employee, EmployeeRole
+from repos.departmentRepo import get_department_by_id
+from repos.employeeRepo import (
+    create_employee,
+    get_all_descendants,
+    get_all_employees_for_hierarchy,
+    get_direct_reports,
+    get_employee_by_email,
+    get_employee_by_id,
+    get_employee_by_public_id,
+    get_manager_chain_ids,
+    has_direct_reports,
+    is_employee_descendant,
+    update_employee,
+    update_employee_active_status,
+    update_employee_manager,
+)
+from repos.officeRepo import get_office_by_id
+from security import hash_password
+
+
+def _to_public_response(employee: Employee) -> EmployeePublicResponse:
+    return EmployeePublicResponse(
+        public_id=employee.public_id,
+        first_name=employee.first_name,
+        last_name=employee.last_name,
+        email=employee.email,
+        role=employee.role.value if hasattr(employee.role, "value") else employee.role,
+        phone=employee.phone,
+        street_address=employee.street_address,
+        city=employee.city,
+        state=employee.state,
+        zip_code=employee.zip_code,
+        country=employee.country,
+        collaboration_status=employee.collaboration_status.value
+        if hasattr(employee.collaboration_status, "value")
+        else employee.collaboration_status,
+        work_mode=employee.work_mode.value
+        if hasattr(employee.work_mode, "value")
+        else employee.work_mode,
+        department_id=employee.department_id,
+        manager_id=employee.manager_id,
+        office_id=employee.office_id,
+        is_active=employee.is_active,
+        created_at=employee.created_at,
+        updated_at=employee.updated_at,
+    )
+
+
+def get_employee_by_public_id_service(session, public_id: UUID) -> EmployeePublicResponse:
+    employee = get_employee_by_public_id(session=session, public_id=public_id)
+
+    if employee is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Employee not found",
+        )
+
+    return _to_public_response(employee)
+
+
+def get_employee_manager_service(session, public_id: UUID) -> EmployeePublicResponse | None:
+    employee = get_employee_by_public_id(session=session, public_id=public_id)
+
+    if employee is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Employee not found",
+        )
+
+    if employee.manager_id is None:
+        return None
+
+    manager = get_employee_by_id(session=session, employee_id=employee.manager_id)
+
+    if manager is None:
+        return None
+
+    return _to_public_response(manager)
+
+
+def get_direct_reports_service(session, public_id: UUID) -> list[EmployeePublicResponse]:
+    manager = get_employee_by_public_id(session=session, public_id=public_id)
+
+    if manager is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Employee not found",
+        )
+
+    direct_reports = get_direct_reports(session=session, manager_id=manager.id)
+
+    return [_to_public_response(report) for report in direct_reports]
+
+
+def get_all_descendants_service(
+    session,
+    public_id: UUID,
+) -> list[EmployeePublicResponse]:
+    manager = get_employee_by_public_id(session=session, public_id=public_id)
+
+    if manager is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Employee not found",
+        )
+
+    if manager.id is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Employee record is invalid",
+        )
+
+    descendants = get_all_descendants(
+        session=session,
+        manager_id=manager.id,
+    )
+
+    return [_to_public_response(employee) for employee in descendants]
+
+
+def get_full_hierarchy_service(session: Session) -> list[EmployeeHierarchyNode]:
+    employees = get_all_employees_for_hierarchy(session)
+    employees_by_id: dict[int, Employee] = {}
+
+    for employee in employees:
+        if employee.id is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Employee record is invalid",
+            )
+        employees_by_id[employee.id] = employee
+
+    children_by_manager_id: dict[int, list[int]] = {}
+    root_ids: list[int] = []
+
+    for employee_id, employee in employees_by_id.items():
+        manager_id = employee.manager_id
+
+        if (
+            manager_id is None
+            or manager_id not in employees_by_id
+            or manager_id == employee_id
+        ):
+            root_ids.append(employee_id)
+            continue
+
+        children_by_manager_id.setdefault(manager_id, []).append(employee_id)
+
+    visited: set[int] = set()
+
+    def build_node(
+        employee_id: int,
+        ancestor_ids: set[int],
+    ) -> EmployeeHierarchyNode | None:
+        if employee_id in visited or employee_id in ancestor_ids:
+            return None
+
+        visited.add(employee_id)
+        next_ancestor_ids = ancestor_ids | {employee_id}
+        direct_reports: list[EmployeeHierarchyNode] = []
+
+        for child_id in children_by_manager_id.get(employee_id, []):
+            child_node = build_node(child_id, next_ancestor_ids)
+            if child_node is not None:
+                direct_reports.append(child_node)
+
+        return EmployeeHierarchyNode(
+            employee=_to_public_response(employees_by_id[employee_id]),
+            direct_reports=direct_reports,
+        )
+
+    hierarchy: list[EmployeeHierarchyNode] = []
+
+    for root_id in root_ids:
+        root_node = build_node(root_id, set())
+        if root_node is not None:
+            hierarchy.append(root_node)
+
+    for employee_id in employees_by_id:
+        if employee_id not in visited:
+            remaining_node = build_node(employee_id, set())
+            if remaining_node is not None:
+                hierarchy.append(remaining_node)
+
+    return hierarchy
+
+
+def _get_valid_manager_for_assignment(
+    session: Session,
+    employee: Employee,
+    manager_public_id: UUID,
+) -> Employee:
+    manager = get_employee_by_public_id(
+        session=session,
+        public_id=manager_public_id,
+    )
+    if manager is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Manager not found",
+        )
+
+    if employee.id is None or manager.id is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Employee record is invalid",
+        )
+
+    if employee.id == manager.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Employee cannot be assigned as their own manager",
+        )
+
+    manager_role = (
+        manager.role.value
+        if hasattr(manager.role, "value")
+        else manager.role
+    )
+    if manager_role != EmployeeRole.MANAGER.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Selected employee does not have the manager role",
+        )
+
+    if employee.manager_id != manager.id:
+        manager_chain_ids = get_manager_chain_ids(
+            session=session,
+            employee_id=manager.id,
+        )
+        if employee.id in manager_chain_ids:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Manager assignment would create a reporting cycle",
+            )
+
+    return manager
+
+
+def assign_employee_manager_service(
+    session: Session,
+    employee_public_id: UUID,
+    manager_data: EmployeeManagerAssignmentRequest,
+) -> EmployeePublicResponse:
+    employee = get_employee_by_public_id(
+        session=session,
+        public_id=employee_public_id,
+    )
+    if employee is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Employee not found",
+        )
+
+    manager = _get_valid_manager_for_assignment(
+        session=session,
+        employee=employee,
+        manager_public_id=manager_data.manager_public_id,
+    )
+    if employee.manager_id == manager.id:
+        return _to_public_response(employee)
+
+    employee.manager_id = manager.id
+    employee.updated_at = datetime.utcnow()
+    updated_employee = update_employee_manager(
+        session=session,
+        employee=employee,
+    )
+    return _to_public_response(updated_employee)
+
+
+def _prepare_profile_updates(
+    employee_data: EmployeeSelfUpdateRequest,
+) -> dict[str, Any]:
+    updates = employee_data.model_dump(exclude_unset=True)
+    if not updates:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="At least one profile field must be provided",
+        )
+
+    nullable_text_fields = {
+        "phone",
+        "street_address",
+        "city",
+        "state",
+        "zip_code",
+        "country",
+    }
+    for field_name in nullable_text_fields & updates.keys():
+        value = updates[field_name]
+        if value is not None:
+            updates[field_name] = value.strip() or None
+
+    required_fields = {"collaboration_status", "work_mode"}
+    if any(updates.get(field_name) is None for field_name in required_fields & updates.keys()):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Collaboration status and work mode cannot be null",
+        )
+
+    return updates
+
+
+def _update_employee_profile(
+    session: Session,
+    employee: Employee,
+    updates: dict[str, Any],
+) -> EmployeePublicResponse:
+    changed = False
+    for field_name, value in updates.items():
+        if getattr(employee, field_name) != value:
+            setattr(employee, field_name, value)
+            changed = True
+
+    if not changed:
+        return _to_public_response(employee)
+
+    employee.updated_at = datetime.utcnow()
+    updated_employee = update_employee(
+        session=session,
+        employee=employee,
+    )
+    return _to_public_response(updated_employee)
+
+
+def update_own_profile_service(
+    session: Session,
+    current_employee: Employee,
+    employee_data: EmployeeSelfUpdateRequest,
+) -> EmployeePublicResponse:
+    if current_employee.id is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Employee record is invalid",
+        )
+
+    updates = _prepare_profile_updates(employee_data)
+    return _update_employee_profile(
+        session=session,
+        employee=current_employee,
+        updates=updates,
+    )
+
+
+def update_subordinate_profile_service(
+    session: Session,
+    current_employee: Employee,
+    employee_public_id: UUID,
+    employee_data: EmployeeManagerUpdateRequest,
+) -> EmployeePublicResponse:
+    current_role = (
+        current_employee.role.value
+        if hasattr(current_employee.role, "value")
+        else current_employee.role
+    )
+    if current_role != EmployeeRole.MANAGER.value:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Manager access required",
+        )
+
+    if current_employee.id is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Employee record is invalid",
+        )
+
+    target_employee = get_employee_by_public_id(
+        session=session,
+        public_id=employee_public_id,
+    )
+    if target_employee is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Employee not found",
+        )
+
+    if target_employee.id is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Employee record is invalid",
+        )
+
+    if not is_employee_descendant(
+        session=session,
+        manager_id=current_employee.id,
+        employee_id=target_employee.id,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Employee is not in manager's reporting hierarchy",
+        )
+
+    updates = _prepare_profile_updates(employee_data)
+    return _update_employee_profile(
+        session=session,
+        employee=target_employee,
+        updates=updates,
+    )
+
+
+def update_employee_as_admin_service(
+    session: Session,
+    employee_public_id: UUID,
+    employee_data: EmployeeAdminUpdateRequest,
+) -> EmployeePublicResponse:
+    employee = get_employee_by_public_id(
+        session=session,
+        public_id=employee_public_id,
+    )
+    if employee is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Employee not found",
+        )
+
+    if employee.id is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Employee record is invalid",
+        )
+
+    updates = _prepare_profile_updates(employee_data)
+
+    required_fields = {"first_name", "last_name", "email", "role"}
+    if any(updates.get(field_name) is None for field_name in required_fields & updates.keys()):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="First name, last name, email, and role cannot be null",
+        )
+
+    for field_name in {"first_name", "last_name"} & updates.keys():
+        normalized_value = updates[field_name].strip()
+        if not normalized_value:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Employee name fields cannot be empty",
+            )
+        updates[field_name] = normalized_value
+
+    if "email" in updates:
+        normalized_email = str(updates["email"]).strip().lower()
+        existing_employee = get_employee_by_email(
+            session=session,
+            email=normalized_email,
+        )
+        if existing_employee is not None and existing_employee.id != employee.id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Employee email already exists",
+            )
+        updates["email"] = normalized_email
+
+    if "department_id" in updates and updates["department_id"] is not None:
+        if get_department_by_id(session, updates["department_id"]) is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Department not found",
+            )
+
+    if "office_id" in updates and updates["office_id"] is not None:
+        if get_office_by_id(session, updates["office_id"]) is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Office not found",
+            )
+
+    if "role" in updates:
+        role_value = (
+            updates["role"].value
+            if hasattr(updates["role"], "value")
+            else updates["role"]
+        )
+        current_role = (
+            employee.role.value
+            if hasattr(employee.role, "value")
+            else employee.role
+        )
+        if (
+            role_value != current_role
+            and role_value != EmployeeRole.MANAGER.value
+            and has_direct_reports(
+                session=session,
+                employee_id=employee.id,
+            )
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Employee with direct reports must have the manager role",
+            )
+
+    if "manager_public_id" in updates:
+        manager_public_id = updates.pop("manager_public_id")
+        if manager_public_id is None:
+            updates["manager_id"] = None
+        else:
+            manager = _get_valid_manager_for_assignment(
+                session=session,
+                employee=employee,
+                manager_public_id=manager_public_id,
+            )
+            updates["manager_id"] = manager.id
+
+    return _update_employee_profile(
+        session=session,
+        employee=employee,
+        updates=updates,
+    )
+
+
+def _set_employee_active_status_service(
+    session: Session,
+    employee_public_id: UUID,
+    is_active: bool,
+) -> EmployeePublicResponse:
+    employee = get_employee_by_public_id(
+        session=session,
+        public_id=employee_public_id,
+    )
+    if employee is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Employee not found",
+        )
+
+    if employee.id is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Employee record is invalid",
+        )
+
+    if employee.is_active == is_active:
+        return _to_public_response(employee)
+
+    employee.is_active = is_active
+    employee.updated_at = datetime.utcnow()
+    updated_employee = update_employee_active_status(
+        session=session,
+        employee=employee,
+    )
+    return _to_public_response(updated_employee)
+
+
+def activate_employee_service(
+    session: Session,
+    employee_public_id: UUID,
+) -> EmployeePublicResponse:
+    return _set_employee_active_status_service(
+        session=session,
+        employee_public_id=employee_public_id,
+        is_active=True,
+    )
+
+
+def deactivate_employee_service(
+    session: Session,
+    employee_public_id: UUID,
+) -> EmployeePublicResponse:
+    return _set_employee_active_status_service(
+        session=session,
+        employee_public_id=employee_public_id,
+        is_active=False,
+    )
+
+
+def create_employee_service(
+    session,
+    employee_data: EmployeeCreateRequest,
+) -> EmployeePublicResponse:
+    normalized_email = employee_data.email.strip().lower()
+
+    if get_employee_by_email(session=session, email=normalized_email):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Employee email already exists",
+        )
+
+    employee = Employee(
+        first_name=employee_data.first_name.strip(),
+        last_name=employee_data.last_name.strip(),
+        email=normalized_email,
+        password_hash=hash_password(employee_data.password),
+        role=employee_data.role,
+        phone=employee_data.phone,
+        street_address=employee_data.street_address,
+        city=employee_data.city,
+        state=employee_data.state,
+        zip_code=employee_data.zip_code,
+        country=employee_data.country,
+        collaboration_status=employee_data.collaboration_status,
+        work_mode=employee_data.work_mode,
+        department_id=employee_data.department_id,
+        manager_id=employee_data.manager_id,
+        office_id=employee_data.office_id,
+        is_active=employee_data.is_active,
+    )
+
+    created_employee = create_employee(session=session, employee=employee)
+    return _to_public_response(created_employee)

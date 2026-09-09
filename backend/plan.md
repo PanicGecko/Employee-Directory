@@ -1,0 +1,477 @@
+# Employee Directory Backend Implementation Plan
+
+This plan breaks the backend implementation into small, sequential tasks. It is based on the current `backend` project structure and the database schema documented in `backend/scheme.md`.
+
+Do not treat this file as implementation. It is a planning checklist for future backend work.
+
+## Phase 1 - Project and Database Foundation
+
+- Confirm the backend package layout under `backend/`.
+- Confirm whether the project will use the existing lowercase `backend` directory rather than creating a separate uppercase `Backend` directory.
+- Add missing package marker files where needed so imports work consistently.
+- Decide and document one import style for the backend package.
+- Review `backend/main.py` for stale imports and invalid router registration.
+- Replace stale copied imports with Employee Directory router imports during implementation.
+- Review `backend/database.py` for stale table alteration logic unrelated to Employee Directory.
+- Remove database setup logic that references non-Employee-Directory tables during implementation.
+- Define the environment variable contract for `DATABASE_URL`.
+- Add an example environment file if the project wants one.
+- Configure the SQLModel engine for PostgreSQL.
+- Configure session creation through a single dependency.
+- Decide whether local development should support SQLite only for tests.
+- Ensure SQLModel metadata imports all table models before metadata creation.
+- Decide whether production schema changes will use Alembic instead of `SQLModel.metadata.create_all`.
+- Add Alembic configuration if migrations are selected.
+- Create the initial migration from the schema in `backend/scheme.md`.
+- Add a database connectivity check utility.
+- Add a simple startup health check that does not leak database details.
+- Verify database startup fails clearly when `DATABASE_URL` is missing.
+- Verify the application boots with a valid PostgreSQL connection.
+
+## Phase 2 - Core Models and Schemas
+
+- Compare every existing model file with `backend/scheme.md`.
+- Record any schema documentation inconsistency before changing models.
+- Keep integer or BigInteger internal primary keys for database relationships.
+- Keep `employees.public_id` as the externally exposed UUID identifier.
+- Define shared timestamp behavior for `created_at` and `updated_at`.
+- Define the `EmployeeRole` enum with `employee`, `manager`, and `hr_admin`.
+- Define the `CollaborationStatus` enum with `open`, `busy`, and `unavailable`.
+- Define the `WorkMode` enum with `remote`, `in_office`, and `hybrid`.
+- Define the `ProficiencyLevel` enum with `beginner`, `intermediate`, `advanced`, and `expert`.
+- Verify the `Employee` table model matches the schema fields.
+- Add any missing employee table constraints from `scheme.md`.
+- Decide whether employee relationship attributes should be included for manager and direct-report navigation.
+- Verify `manager_id` references `employees.id`, not `employees.public_id`.
+- Verify employees cannot rely on separate manager or admin tables.
+- Verify the `Department` table model matches the schema fields.
+- Verify department `name` is unique and non-null.
+- Verify the `Office` table model matches the schema fields.
+- Verify office address fields match nullable and non-null requirements.
+- Verify the `Skill` table model matches the schema fields.
+- Verify skill `name` is unique and non-null.
+- Verify `EmployeeSkill` uses a composite primary key of `employee_id` and `skill_id`.
+- Verify `EmployeeSkill` includes required `proficiency`.
+- Verify `EmployeeSkill` does not add a separate `id` unless requirements change.
+- Verify `AuditLog` matches the audit log schema.
+- Verify `AuditLog.target_id` remains a polymorphic internal ID, not a direct foreign key.
+- Add a `RefreshToken` table model matching the schema.
+- Verify `RefreshToken.employee_id` references `employees.id`.
+- Verify `RefreshToken.token_hash` is unique and non-null.
+- Create employee request schemas for account creation.
+- Create employee request schemas for self profile updates.
+- Create employee request schemas for manager-permitted updates.
+- Create employee request schemas for HR Admin updates.
+- Create employee response schemas that expose `public_id` rather than internal `id` by default.
+- Create compact employee list response schemas.
+- Create detailed employee profile response schemas.
+- Create department create, update, and response schemas.
+- Create office create, update, and response schemas.
+- Create skill create, update, and response schemas.
+- Create employee skill assignment and response schemas.
+- Create auth login request and token response schemas.
+- Create refresh-token request and response schemas.
+- Create audit log response schemas.
+- Ensure no response schema exposes `password_hash`.
+- Ensure no response schema exposes refresh-token hashes.
+
+## Phase 3 - Repositories
+
+- Create an employee repository module.
+- Add employee lookup by internal `id`.
+- Add employee lookup by `public_id`.
+- Add employee lookup by email.
+- Add employee email-exists check.
+- Add employee create method.
+- Add employee update method.
+- Add employee active-status update method.
+- Add employee role update method.
+- Add employee manager update method.
+- Add employee department update method.
+- Add employee office update method.
+- Add employee collaboration-status update method.
+- Add employee work-mode update method.
+- Add employee search base query.
+- Add employee text search by first name, last name, and email.
+- Add employee filter by department.
+- Add employee filter by office.
+- Add employee filter by work mode.
+- Add employee filter by collaboration status.
+- Add employee filter by role.
+- Add employee filter by manager.
+- Add employee filter by active status.
+- Add employee filter by skill.
+- Add employee filter by proficiency.
+- Add employee combined skill and minimum-proficiency filter.
+- Add employee pagination support.
+- Add employee count query for paginated responses.
+- Add employee manager lookup query.
+- Add employee direct reports query.
+- Add employee descendants query.
+- Add method to determine whether one employee is beneath a manager.
+- Add method to detect hierarchy cycles before manager assignment.
+- Create a department repository module.
+- Add department lookup by internal `id`.
+- Add department lookup by name.
+- Add department list method.
+- Add department create method.
+- Add department update method.
+- Add department delete method.
+- Add department employee-count method.
+- Add method to check whether employees reference a department.
+- Create an office repository module.
+- Add office lookup by internal `id`.
+- Add office lookup by name.
+- Add office list method.
+- Add office create method.
+- Add office update method.
+- Add office delete method.
+- Add office employee-count method.
+- Add method to check whether employees reference an office.
+- Create a skill repository module.
+- Add skill lookup by internal `id`.
+- Add skill lookup by name.
+- Add skill list method.
+- Add skill create method.
+- Add skill update method.
+- Add skill delete method.
+- Add skill employee-count method.
+- Add method to check whether employee-skill rows reference a skill.
+- Create an employee skill repository module.
+- Add employee skill lookup by employee and skill.
+- Add employee skill assignment method.
+- Add employee skill proficiency update method.
+- Add employee skill removal method.
+- Add employee skills list for one employee.
+- Add employees-by-skill query.
+- Add employees-by-skill-and-proficiency query.
+- Add employees-by-minimum-proficiency query.
+- Create an audit repository module.
+- Add audit log create method.
+- Add audit log list method.
+- Add audit log lookup by internal `id`.
+- Add audit log filter by actor employee.
+- Add audit log filter by target type.
+- Add audit log filter by target id.
+- Add audit log filter by action.
+- Add audit log date-range filter.
+- Add audit log pagination support.
+- Create a refresh token repository module.
+- Add refresh-token create method.
+- Add refresh-token lookup by token hash.
+- Add refresh-token delete by internal `id`.
+- Add refresh-token delete by token hash.
+- Add refresh-token delete all for employee.
+- Add expired refresh-token cleanup method.
+
+## Phase 4 - Authentication
+
+- Choose a password hashing library.
+- Add password hashing utility.
+- Add password verification utility.
+- Add configuration for JWT secret, algorithm, and token lifetimes.
+- Move hardcoded auth secrets out of source code.
+- Add access-token creation utility.
+- Add access-token decode and validation utility.
+- Add refresh-token random generation utility.
+- Add refresh-token hashing utility.
+- Add refresh-token expiration calculation.
+- Add login service method.
+- Make login lookup employees by email.
+- Make login reject invalid passwords.
+- Make login reject inactive employees.
+- Make login return an access token and refresh token.
+- Persist only the refresh-token hash.
+- Add refresh-token rotation service method.
+- Make refresh-token rotation validate the supplied token hash.
+- Make refresh-token rotation reject missing token records.
+- Make refresh-token rotation reject expired token records.
+- Make refresh-token rotation delete the old record.
+- Make refresh-token rotation create a new refresh-token record.
+- Make refresh-token rotation return a new access token and refresh token.
+- Add logout service method for one refresh token.
+- Add logout-all-sessions service method for one employee if required.
+- Add authenticated employee dependency.
+- Make authenticated employee dependency decode only access tokens.
+- Make authenticated employee dependency load by internal ID or public ID consistently.
+- Make authenticated employee dependency reject missing employees.
+- Make authenticated employee dependency reject inactive employees.
+- Add auth router login endpoint.
+- Add auth router refresh endpoint.
+- Add auth router logout endpoint.
+- Ensure raw refresh tokens are never logged.
+- Ensure token hashes are never returned in API responses.
+
+## Phase 5 - Authorization
+
+- Create a centralized authorization service.
+- Add helper to identify HR Admin employees.
+- Add helper to identify manager employees.
+- Add helper to identify ordinary employees.
+- Add rule for employee self-profile reads.
+- Add rule for employee self-profile updates.
+- Add rule for employee skill self-management if supported.
+- Add rule preventing employees from editing unrelated employees.
+- Add rule allowing managers to edit direct reports for permitted fields.
+- Add rule allowing managers to edit indirect reports for permitted fields.
+- Add rule preventing managers from editing unrelated employees.
+- Add rule preventing managers from creating employee accounts.
+- Add rule preventing managers from assigning or changing managers.
+- Add rule preventing managers from changing roles.
+- Add rule allowing HR Admins to create employee accounts.
+- Add rule allowing HR Admins to edit any employee.
+- Add rule allowing HR Admins to change roles.
+- Add rule allowing HR Admins to assign managers.
+- Add rule allowing HR Admins to activate and deactivate accounts.
+- Add rule allowing HR Admins to manage departments.
+- Add rule allowing HR Admins to manage offices.
+- Add rule allowing HR Admins to manage standardized skills.
+- Add rule allowing HR Admins to view audit history.
+- Add admin-only organization modification helper.
+- Add reusable forbidden-error helpers.
+- Ensure routers call authorization service instead of duplicating role checks.
+
+## Phase 6 - Employee Directory
+
+- Create or align the employee router module.
+- Add list employees endpoint.
+- Add pagination parameters to list employees.
+- Add text search parameter to list employees.
+- Add department filter parameter.
+- Add office filter parameter.
+- Add work-mode filter parameter.
+- Add collaboration-status filter parameter.
+- Add role filter parameter where allowed.
+- Add skill filter parameter.
+- Add proficiency filter parameter.
+- Add manager filter parameter.
+- Add active-status filter parameter with authorization rules.
+- Add employee detail endpoint using `public_id`.
+- Add self-profile endpoint.
+- Add update-self-profile endpoint.
+- Add manager update-subordinate-profile endpoint or shared update endpoint with authorization.
+- Add HR Admin update employee endpoint or shared update endpoint with authorization.
+- Add employee creation endpoint restricted to HR Admins.
+- Add employee activation endpoint restricted to HR Admins.
+- Add employee deactivation endpoint restricted to HR Admins.
+- Add employee manager lookup endpoint.
+- Add employee direct reports endpoint.
+- Add employee descendants endpoint.
+- Add full organizational hierarchy endpoint.
+- Add service method to build hierarchy response data.
+- Add validation preventing self-management.
+- Add validation preventing hierarchy cycles.
+- Add validation requiring referenced department to exist.
+- Add validation requiring referenced office to exist when supplied.
+- Add validation allowing nullable office for remote employees.
+- Add validation for permitted self-edit fields.
+- Add validation for permitted manager-edit fields.
+- Add validation for HR Admin-only fields.
+- Add audit recording for employee creation.
+- Add audit recording for profile updates.
+- Add audit recording for role changes.
+- Add audit recording for manager changes.
+- Add audit recording for activation and deactivation.
+
+## Phase 7 - Departments
+
+- Create or align the department router module.
+- Create department service module.
+- Add list departments endpoint.
+- Add department detail endpoint.
+- Add employees-by-department endpoint or employee filter integration.
+- Add create department endpoint restricted to HR Admins.
+- Add update department endpoint restricted to HR Admins.
+- Add delete department endpoint restricted to HR Admins.
+- Add duplicate department name validation.
+- Add validation for deleting departments referenced by employees.
+- Decide whether delete should be blocked or require employee reassignment first.
+- Add audit recording for department creation.
+- Add audit recording for department updates.
+- Add audit recording for department deletion.
+
+## Phase 8 - Offices
+
+- Create or align the office router module.
+- Create office service module.
+- Add list offices endpoint.
+- Add office detail endpoint.
+- Add employees-by-office endpoint or employee filter integration.
+- Add create office endpoint restricted to HR Admins.
+- Add update office endpoint restricted to HR Admins.
+- Add delete office endpoint restricted to HR Admins.
+- Add duplicate office name validation.
+- Add validation for deleting offices referenced by employees.
+- Decide whether delete should be blocked or require employee office removal first.
+- Add validation that remote employees may have nullable `office_id`.
+- Add audit recording for office creation.
+- Add audit recording for office updates.
+- Add audit recording for office deletion.
+
+## Phase 9 - Skills and Expertise
+
+- Create or align the skill router module.
+- Create skill service module.
+- Add list standardized skills endpoint.
+- Add skill detail endpoint.
+- Add create standardized skill endpoint restricted to HR Admins.
+- Add update standardized skill endpoint restricted to HR Admins.
+- Add delete standardized skill endpoint restricted to HR Admins.
+- Add duplicate skill name validation.
+- Add validation for deleting skills referenced by employees.
+- Add employee skills endpoint.
+- Add assign skill to employee endpoint.
+- Add remove skill from employee endpoint.
+- Add update employee skill proficiency endpoint.
+- Add validation that assigned skill exists.
+- Add validation that employee exists and is active where appropriate.
+- Add validation that proficiency is stored on `employee_skills`.
+- Add validation preventing duplicate employee-skill assignments.
+- Add employee skill self-management authorization if supported.
+- Add manager employee-skill management authorization for descendants if supported.
+- Add HR Admin employee-skill management authorization.
+- Add search employees by skill endpoint behavior.
+- Add search employees by exact proficiency endpoint behavior.
+- Add search employees by minimum proficiency endpoint behavior.
+- Add combined department, skill, and proficiency filtering.
+- Add audit recording for skill creation.
+- Add audit recording for skill updates.
+- Add audit recording for skill deletion.
+- Add audit recording for employee skill assignment.
+- Add audit recording for employee skill removal.
+- Add audit recording for employee skill proficiency changes.
+
+## Phase 10 - Auditing
+
+- Create audit service module.
+- Define audit action names.
+- Define target type names.
+- Add utility to extract old values before changes.
+- Add utility to extract new values after changes.
+- Add utility to compare changed fields.
+- Add utility to exclude sensitive fields.
+- Exclude passwords from audit values.
+- Exclude password hashes from audit values.
+- Exclude raw JWTs from audit values.
+- Exclude raw refresh tokens from audit values.
+- Exclude refresh-token hashes from audit values unless explicitly required for security operations.
+- Add audit helper for employee changes.
+- Add audit helper for role changes.
+- Add audit helper for manager changes.
+- Add audit helper for collaboration-status changes.
+- Add audit helper for department changes.
+- Add audit helper for office changes.
+- Add audit helper for standardized skill changes.
+- Add audit helper for employee-skill changes.
+- Add audit helper for password changes without storing sensitive values.
+- Ensure audit record creation happens in the same transaction as the business change where possible.
+- Ensure audit logs are append-only at the service layer.
+- Create audit router module.
+- Add audit-log list endpoint restricted to HR Admins.
+- Add audit-log detail endpoint restricted to HR Admins.
+- Add audit filters for actor, target type, target id, action, and date range.
+- Add audit pagination.
+- Add tests that failed business transactions do not leave misleading audit records.
+
+## Phase 11 - Validation and Error Handling
+
+- Define common not-found exception behavior.
+- Define common forbidden exception behavior.
+- Define common authentication exception behavior.
+- Define duplicate email error behavior.
+- Define duplicate department name error behavior.
+- Define duplicate office name error behavior.
+- Define duplicate skill name error behavior.
+- Define duplicate employee-skill assignment error behavior.
+- Define invalid manager error behavior.
+- Define self-management prevention error behavior.
+- Define hierarchy-cycle prevention error behavior.
+- Define referenced department validation error behavior.
+- Define referenced office validation error behavior.
+- Define invalid proficiency error behavior.
+- Define inactive-account error behavior.
+- Define expired-refresh-token error behavior.
+- Define revoked-refresh-token error behavior.
+- Normalize database integrity errors into API responses.
+- Normalize request validation errors into API responses.
+- Keep API error response shape consistent with existing `ResponseDTO` or replace it deliberately.
+- Ensure error responses do not leak secrets or database internals.
+
+## Phase 12 - Testing
+
+- Set up test database configuration.
+- Add fixtures for employees.
+- Add fixtures for managers.
+- Add fixtures for HR Admins.
+- Add fixtures for departments.
+- Add fixtures for offices.
+- Add fixtures for skills.
+- Add fixtures for employee skills.
+- Add repository tests for employees.
+- Add repository tests for departments.
+- Add repository tests for offices.
+- Add repository tests for skills.
+- Add repository tests for employee skills.
+- Add repository tests for audit logs.
+- Add repository tests for refresh tokens.
+- Add service tests for employee creation.
+- Add service tests for profile updates.
+- Add service tests for manager assignment.
+- Add service tests for hierarchy traversal.
+- Add service tests for hierarchy-cycle prevention.
+- Add service tests for employee search and filters.
+- Add service tests for skill and proficiency behavior.
+- Add authentication tests for password hashing and verification.
+- Add authentication tests for login success.
+- Add authentication tests for invalid password.
+- Add authentication tests for inactive employee login rejection.
+- Add access-token validation tests.
+- Add refresh-token persistence tests.
+- Add refresh-token rotation tests.
+- Add refresh-token expiration tests.
+- Add logout tests.
+- Add authorization matrix test for employee self-edit.
+- Add authorization matrix test for employee editing another employee.
+- Add authorization matrix test for manager editing direct report.
+- Add authorization matrix test for manager editing indirect report.
+- Add authorization matrix test for manager editing unrelated employee.
+- Add authorization matrix test for manager attempting manager assignment.
+- Add authorization matrix test for HR Admin manager assignment.
+- Add authorization matrix test for HR Admin account creation.
+- Add router or integration tests for employee endpoints.
+- Add router or integration tests for department endpoints.
+- Add router or integration tests for office endpoints.
+- Add router or integration tests for skill endpoints.
+- Add router or integration tests for audit endpoints.
+- Add audit tests for every meaningful change category.
+- Add transaction rollback tests for audited operations.
+- Add pagination tests.
+- Add invalid input tests.
+
+## Phase 13 - Final Backend Verification
+
+- Verify every table in `backend/scheme.md` has a matching table model.
+- Verify all foreign keys use internal integer IDs.
+- Verify API-facing employee URLs and responses use `public_id` where appropriate.
+- Verify no plaintext passwords are stored.
+- Verify no raw refresh tokens are stored.
+- Verify no raw JWTs are stored.
+- Verify refresh-token rotation deletes the old token record.
+- Verify expired refresh tokens are rejected.
+- Verify inactive employees cannot authenticate or continue using protected routes.
+- Verify all protected routes require authentication.
+- Verify Employee, Manager, and HR Admin permissions match the business requirements.
+- Verify managers can act on indirect reports through recursive hierarchy checks.
+- Verify managers cannot act on unrelated employees.
+- Verify only HR Admins can create employee accounts.
+- Verify only HR Admins can assign managers.
+- Verify only HR Admins can change roles.
+- Verify no separate manager, admin, or team tables were added.
+- Verify employee search supports required filter combinations.
+- Verify skill searches support proficiency.
+- Verify audit logs are created for meaningful changes.
+- Verify audit logs omit sensitive values.
+- Verify API docs expose the intended route contract.
+- Verify migrations match the SQLModel table definitions.
+- Run the full automated test suite.
+- Run a manual smoke test against a local PostgreSQL database.
