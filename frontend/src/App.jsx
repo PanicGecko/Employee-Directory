@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { AUTH_CHANGED_EVENT } from './apis/apiClient'
 import { getEmployee } from './apis/employeesApi'
@@ -36,10 +36,10 @@ const adminRoutes = {
   '/admin/audit-logs': AuditLogsPage,
 }
 
-function Redirect({ to }) {
+function Redirect({ to, replacePath }) {
   useEffect(() => {
-    window.location.replace(to)
-  }, [to])
+    replacePath(to)
+  }, [replacePath, to])
 
   return null
 }
@@ -79,11 +79,32 @@ function App() {
   const dispatch = useDispatch()
   const { accessToken, employee, refreshToken } = useSelector((state) => state.auth)
   const [isRestoringSession, setIsRestoringSession] = useState(false)
-  const path = window.location.pathname
+  const [path, setPath] = useState(() => window.location.pathname)
   const hasSession = Boolean(accessToken || refreshToken)
   const needsEmployeeHydration = hasSession && !employee
   const hasPartialEmployee = hasSession && employee && (!employee.first_name || !employee.last_name)
   const isAdmin = employee?.role === 'hr_admin'
+
+  const replacePath = useCallback((to) => {
+    if (window.location.pathname === to) {
+      return
+    }
+
+    window.history.replaceState(null, '', to)
+    setPath(to)
+  }, [])
+
+  useEffect(() => {
+    function handlePopState() {
+      setPath(window.location.pathname)
+    }
+
+    window.addEventListener('popstate', handlePopState)
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState)
+    }
+  }, [])
 
   useEffect(() => {
     function handleAuthChanged(event) {
@@ -152,27 +173,29 @@ function App() {
   ])
 
   if (path === '/') {
-    return <Redirect to={hasSession ? '/organization' : '/login'} />
+    return <Redirect to={hasSession ? '/organization' : '/login'} replacePath={replacePath} />
   }
 
   if (path === '/home') {
-    return <Redirect to="/organization" />
+    return <Redirect to="/organization" replacePath={replacePath} />
   }
 
   if (path === '/settings') {
-    return <Redirect to="/profile" />
+    return <Redirect to="/profile" replacePath={replacePath} />
   }
 
   if (path === '/audit-logs') {
-    return <Redirect to="/admin/audit-logs" />
+    return <Redirect to="/admin/audit-logs" replacePath={replacePath} />
   }
 
   if (path === '/login' && hasSession) {
-    return <Redirect to="/organization" />
+    return <Redirect to="/organization" replacePath={replacePath} />
   }
 
   if (!hasSession) {
-    return path === '/login' ? <LoginPage /> : <Redirect to="/login" />
+    return path === '/login'
+      ? <LoginPage />
+      : <Redirect to="/login" replacePath={replacePath} />
   }
 
   if (isRestoringSession || needsEmployeeHydration || hasPartialEmployee) {
