@@ -17,5 +17,6 @@ class DepartmentResponse(BaseModel):
     id: int
     name: str
     description: str | None = None
+    is_active: bool
     created_at: datetime
     updated_at: datetime

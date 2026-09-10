@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from dto.authDto import LoginRequest, RefreshTokenRequest
 from database import SessionDep
 from dto.ResponseDTO import ResponseDTO
-from services.authService import login_employee, refresh_employee_tokens
+from services.authService import login_employee, logout_employee, refresh_employee_tokens
 
 
 router = APIRouter(
@@ -38,4 +38,18 @@ def refresh_tokens(refresh_request: RefreshTokenRequest, session: SessionDep):
         status_code=200,
         msg="Tokens refreshed successfully",
         data=data,
+    ).to_response()
+
+
+@router.post("/logout")
+def logout(logout_request: RefreshTokenRequest, session: SessionDep):
+    logout_employee(
+        session=session,
+        refresh_token=logout_request.refresh_token,
+    )
+
+    return ResponseDTO(
+        status_code=200,
+        msg="Logged out successfully",
+        data=None,
     ).to_response()

@@ -15,6 +15,16 @@ def get_office_by_name(session: Session, name: str) -> Office | None:
     ).first()
 
 
+def list_offices(session: Session) -> list[Office]:
+    return list(session.exec(select(Office)).all())
+
+
+def list_active_offices(session: Session) -> list[Office]:
+    return list(
+        session.exec(select(Office).where(Office.is_active == True)).all()  # noqa: E712
+    )
+
+
 def create_office(session: Session, office: Office) -> Office:
     session.add(office)
     session.commit()

@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 
 from database import SessionDep
 from dependencies import CurrentEmployeeDep, HRAdminEmployeeDep
@@ -11,6 +11,8 @@ from dto.employeeDto import (
     EmployeeManagerUpdateRequest,
     EmployeeSelfUpdateRequest,
 )
+from models.employee import CollaborationStatus, WorkMode
+from models.skill import ProficiencyLevel
 from services.employeeService import (
     activate_employee_service,
     assign_employee_manager_service,
@@ -20,6 +22,7 @@ from services.employeeService import (
     get_employee_by_public_id_service,
     get_full_hierarchy_service,
     get_employee_manager_service,
+    list_employees_service,
     update_own_profile_service,
     update_employee_as_admin_service,
     update_subordinate_profile_service,
@@ -29,6 +32,43 @@ router = APIRouter(
     prefix="/employees",
     tags=["employees"],
 )
+
+
+@router.get("")
+def list_employees(
+    session: SessionDep,
+    current_employee: CurrentEmployeeDep,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    search: str | None = Query(default=None, min_length=1),
+    department_id: int | None = Query(default=None),
+    office_id: int | None = Query(default=None),
+    work_mode: WorkMode | None = Query(default=None),
+    collaboration_status: CollaborationStatus | None = Query(default=None),
+    is_active: bool | None = Query(default=None),
+    skill_id: int | None = Query(default=None),
+    proficiency: ProficiencyLevel | None = Query(default=None),
+):
+    del current_employee
+    result = list_employees_service(
+        session=session,
+        page=page,
+        page_size=page_size,
+        search=search,
+        department_id=department_id,
+        office_id=office_id,
+        work_mode=work_mode,
+        collaboration_status=collaboration_status,
+        is_active=is_active,
+        skill_id=skill_id,
+        proficiency=proficiency,
+    )
+
+    return ResponseDTO(
+        status_code=200,
+        msg="Employees retrieved successfully",
+        data=result.model_dump(mode="json"),
+    ).to_response()
 
 
 @router.get("/hierarchy")
@@ -131,11 +171,11 @@ def update_employee_as_admin(
     session: SessionDep,
     current_admin: HRAdminEmployeeDep,
 ):
-    del current_admin
     employee = update_employee_as_admin_service(
         session=session,
         employee_public_id=public_id,
         employee_data=employee_request,
+        actor_employee=current_admin,
     )
 
     return ResponseDTO(

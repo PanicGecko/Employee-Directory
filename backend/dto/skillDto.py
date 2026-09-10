@@ -32,3 +32,10 @@ class AssignSkillRequest(BaseModel):
 
 class UpdateSkillProficiencyRequest(BaseModel):
     proficiency: ProficiencyLevel
+
+
+class EmployeeSkillResponse(BaseModel):
+    skill_id: int
+    skill_name: str
+    description: str | None = None
+    proficiency: ProficiencyLevel

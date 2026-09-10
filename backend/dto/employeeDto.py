@@ -3,6 +3,9 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
+from dto.departmentDto import DepartmentResponse
+from dto.officeDto import OfficeResponse
+from dto.skillDto import EmployeeSkillResponse
 from models.employee import CollaborationStatus, EmployeeRole, WorkMode
 
 
@@ -46,6 +49,9 @@ class EmployeePublicResponse(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+    department: DepartmentResponse | None = None
+    office: OfficeResponse | None = None
+    skills: list[EmployeeSkillResponse] = Field(default_factory=list)
 
 
 class EmployeeManagerAssignmentRequest(BaseModel):
@@ -82,3 +88,10 @@ class EmployeeAdminUpdateRequest(EmployeeSelfUpdateRequest):
 class EmployeeHierarchyNode(BaseModel):
     employee: EmployeePublicResponse
     direct_reports: list["EmployeeHierarchyNode"] = Field(default_factory=list)
+
+
+class EmployeePaginatedResponse(BaseModel):
+    items: list[EmployeePublicResponse]
+    total: int
+    page: int
+    page_size: int

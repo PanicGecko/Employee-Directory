@@ -4,14 +4,62 @@ from fastapi import HTTPException, status
 
 from dto.officeDto import OfficeCreateRequest, OfficeResponse, OfficeUpdateRequest
 from models.office import Office
+from repos.employeeRepo import has_employees_in_office
 from repos.officeRepo import (
     create_office,
     get_office_by_id,
+    list_active_offices,
+    list_offices,
     update_office,
 )
+from services.auditService import record_audit_log
 
 
-def create_office_service(session, office_data: OfficeCreateRequest) -> OfficeResponse:
+def list_offices_service(session) -> list[OfficeResponse]:
+    offices = list_offices(session=session)
+
+    return [
+        OfficeResponse(
+            id=office.id,
+            name=office.name,
+            street_address=office.street_address,
+            city=office.city,
+            state=office.state,
+            zip_code=office.zip_code,
+            country=office.country,
+            is_active=office.is_active,
+            created_at=office.created_at,
+            updated_at=office.updated_at,
+        )
+        for office in offices
+    ]
+
+
+def list_active_offices_service(session) -> list[OfficeResponse]:
+    offices = list_active_offices(session=session)
+
+    return [
+        OfficeResponse(
+            id=office.id,
+            name=office.name,
+            street_address=office.street_address,
+            city=office.city,
+            state=office.state,
+            zip_code=office.zip_code,
+            country=office.country,
+            is_active=office.is_active,
+            created_at=office.created_at,
+            updated_at=office.updated_at,
+        )
+        for office in offices
+    ]
+
+
+def create_office_service(
+    session,
+    office_data: OfficeCreateRequest,
+    actor_employee_id: int,
+) -> OfficeResponse:
     normalized_name = office_data.name.strip()
 
     if not normalized_name:
@@ -30,6 +78,23 @@ def create_office_service(session, office_data: OfficeCreateRequest) -> OfficeRe
     )
 
     created_office = create_office(session=session, office=office)
+    record_audit_log(
+        session=session,
+        actor_employee_id=actor_employee_id,
+        target_type="office",
+        target_id=created_office.id,
+        action="create",
+        new_values={
+            "name": created_office.name,
+            "street_address": created_office.street_address,
+            "city": created_office.city,
+            "state": created_office.state,
+            "zip_code": created_office.zip_code,
+            "country": created_office.country,
+            "is_active": created_office.is_active,
+        },
+    )
+    session.commit()
 
     return OfficeResponse(
         id=created_office.id,
@@ -39,6 +104,7 @@ def create_office_service(session, office_data: OfficeCreateRequest) -> OfficeRe
         state=created_office.state,
         zip_code=created_office.zip_code,
         country=created_office.country,
+        is_active=created_office.is_active,
         created_at=created_office.created_at,
         updated_at=created_office.updated_at,
     )
@@ -48,6 +114,7 @@ def update_office_service(
     session,
     office_id: int,
     office_data: OfficeUpdateRequest,
+    actor_employee_id: int,
 ) -> OfficeResponse:
     if all(
         v is None
@@ -121,6 +188,7 @@ def update_office_service(
             state=office.state,
             zip_code=office.zip_code,
             country=office.country,
+            is_active=office.is_active,
             created_at=office.created_at,
             updated_at=office.updated_at,
         )
@@ -128,6 +196,23 @@ def update_office_service(
     office.updated_at = datetime.utcnow()
 
     updated_office = update_office(session=session, office=office)
+    record_audit_log(
+        session=session,
+        actor_employee_id=actor_employee_id,
+        target_type="office",
+        target_id=updated_office.id,
+        action="update",
+        old_values=original_values,
+        new_values={
+            "name": updated_office.name,
+            "street_address": updated_office.street_address,
+            "city": updated_office.city,
+            "state": updated_office.state,
+            "zip_code": updated_office.zip_code,
+            "country": updated_office.country,
+        },
+    )
+    session.commit()
 
     return OfficeResponse(
         id=updated_office.id,
@@ -137,6 +222,70 @@ def update_office_service(
         state=updated_office.state,
         zip_code=updated_office.zip_code,
         country=updated_office.country,
+        is_active=updated_office.is_active,
         created_at=updated_office.created_at,
         updated_at=updated_office.updated_at,
+    )
+
+
+def delete_office_service(
+    session,
+    office_id: int,
+    actor_employee_id: int,
+) -> OfficeResponse:
+    office = get_office_by_id(session=session, office_id=office_id)
+    if office is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Office not found",
+        )
+
+    if has_employees_in_office(session=session, office_id=office_id):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Office is assigned to employees and cannot be deleted",
+        )
+
+    office.is_active = False
+    office.updated_at = datetime.utcnow()
+
+    deactivated_office = update_office(session=session, office=office)
+    record_audit_log(
+        session=session,
+        actor_employee_id=actor_employee_id,
+        target_type="office",
+        target_id=deactivated_office.id,
+        action="delete",
+        old_values={
+            "name": deactivated_office.name,
+            "street_address": deactivated_office.street_address,
+            "city": deactivated_office.city,
+            "state": deactivated_office.state,
+            "zip_code": deactivated_office.zip_code,
+            "country": deactivated_office.country,
+            "is_active": True,
+        },
+        new_values={
+            "name": deactivated_office.name,
+            "street_address": deactivated_office.street_address,
+            "city": deactivated_office.city,
+            "state": deactivated_office.state,
+            "zip_code": deactivated_office.zip_code,
+            "country": deactivated_office.country,
+            "is_active": deactivated_office.is_active,
+        },
+    )
+    session.commit()
+
+    return OfficeResponse(
+        id=deactivated_office.id,
+        name=deactivated_office.name,
+        street_address=deactivated_office.street_address,
+        city=deactivated_office.city,
+        state=deactivated_office.state,
+        zip_code=deactivated_office.zip_code,
+        country=deactivated_office.country,
+        is_active=deactivated_office.is_active,
+        created_at=deactivated_office.created_at,
+        updated_at=deactivated_office.updated_at,
     )

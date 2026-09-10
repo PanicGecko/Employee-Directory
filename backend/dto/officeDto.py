@@ -29,5 +29,6 @@ class OfficeResponse(BaseModel):
     state: str | None = None
     zip_code: str | None = None
     country: str
+    is_active: bool
     created_at: datetime
     updated_at: datetime

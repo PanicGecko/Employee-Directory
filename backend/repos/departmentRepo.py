@@ -15,6 +15,16 @@ def get_department_by_name(session: Session, name: str) -> Department | None:
     ).first()
 
 
+def list_departments(session: Session) -> list[Department]:
+    return list(session.exec(select(Department)).all())
+
+
+def list_active_departments(session: Session) -> list[Department]:
+    return list(
+        session.exec(select(Department).where(Department.is_active == True)).all()  # noqa: E712
+    )
+
+
 def create_department(session: Session, department: Department) -> Department:
     session.add(department)
     session.commit()

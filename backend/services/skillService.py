@@ -5,6 +5,7 @@ from fastapi import HTTPException, status
 
 from dto.skillDto import (
     AssignSkillRequest,
+    EmployeeSkillResponse,
     SkillCreateRequest,
     SkillResponse,
     SkillUpdateRequest,
@@ -16,10 +17,76 @@ from repos.employeeSkillRepo import (
     create_employee_skill,
     delete_employee_skill,
     get_employee_skill,
+    get_employee_skills_with_details,
+    has_employees_with_skill,
     update_employee_skill,
 )
 from repos.employeeRepo import get_employee_by_public_id
-from repos.skillRepo import create_skill, get_skill_by_id, get_skill_by_name, update_skill
+from repos.skillRepo import (
+    create_skill,
+    delete_skill,
+    get_skill_by_id,
+    get_skill_by_name,
+    list_skills,
+    search_skills_by_name,
+    update_skill,
+)
+from services.auditService import record_audit_log
+
+
+def list_skills_service(session) -> list[SkillResponse]:
+    skills = list_skills(session=session)
+
+    return [
+        SkillResponse(
+            id=skill.id,
+            name=skill.name,
+            description=skill.description,
+            created_at=skill.created_at,
+            updated_at=skill.updated_at,
+        )
+        for skill in skills
+    ]
+
+
+def search_skills_service(session, query: str) -> list[SkillResponse]:
+    normalized_query = query.strip()
+    if not normalized_query:
+        return []
+
+    skills = search_skills_by_name(session=session, query=normalized_query, limit=5)
+
+    return [
+        SkillResponse(
+            id=skill.id,
+            name=skill.name,
+            description=skill.description,
+            created_at=skill.created_at,
+            updated_at=skill.updated_at,
+        )
+        for skill in skills
+    ]
+
+
+def get_employee_skills_service(session, public_id: UUID) -> list[EmployeeSkillResponse]:
+    employee = get_employee_by_public_id(session=session, public_id=public_id)
+    if employee is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Employee not found",
+        )
+
+    employee_skills = get_employee_skills_with_details(session=session, employee_id=employee.id)
+
+    return [
+        EmployeeSkillResponse(
+            skill_id=skill.id,
+            skill_name=skill.name,
+            description=skill.description,
+            proficiency=employee_skill.proficiency,
+        )
+        for employee_skill, skill in employee_skills
+    ]
 
 
 def create_skill_service(session, skill_data: SkillCreateRequest) -> SkillResponse:
@@ -91,6 +158,23 @@ def update_skill_service(
     )
 
 
+def delete_skill_service(session, skill_id: int) -> None:
+    skill = get_skill_by_id(session=session, skill_id=skill_id)
+    if skill is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Skill not found",
+        )
+
+    if has_employees_with_skill(session=session, skill_id=skill_id):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Skill is assigned to employees and cannot be deleted",
+        )
+
+    delete_skill(session=session, skill=skill)
+
+
 def assign_skill_service(session, current_employee: Employee, assign_data: AssignSkillRequest) -> dict:
     target_employee = get_employee_by_public_id(session=session, public_id=assign_data.employee_public_id)
     if target_employee is None:
@@ -143,6 +227,19 @@ def assign_skill_service(session, current_employee: Employee, assign_data: Assig
     )
 
     created_assignment = create_employee_skill(session=session, employee_skill=employee_skill)
+    record_audit_log(
+        session=session,
+        actor_employee_id=current_employee.id,
+        target_type="employee_skill",
+        target_id=target_employee.id,
+        action="assign_skill",
+        new_values={
+            "employee_id": created_assignment.employee_id,
+            "skill_id": created_assignment.skill_id,
+            "proficiency": created_assignment.proficiency.value,
+        },
+    )
+    session.commit()
 
     return {
         "employee_id": created_assignment.employee_id,
@@ -185,8 +282,27 @@ def update_skill_proficiency_service(
             detail="Employee does not have this skill assigned",
         )
 
+    previous_proficiency = employee_skill.proficiency.value
     employee_skill.proficiency = update_data.proficiency
     updated_assignment = update_employee_skill(session=session, employee_skill=employee_skill)
+    record_audit_log(
+        session=session,
+        actor_employee_id=current_employee.id,
+        target_type="employee_skill",
+        target_id=target_employee.id,
+        action="update_skill_proficiency",
+        old_values={
+            "employee_id": updated_assignment.employee_id,
+            "skill_id": updated_assignment.skill_id,
+            "proficiency": previous_proficiency,
+        },
+        new_values={
+            "employee_id": updated_assignment.employee_id,
+            "skill_id": updated_assignment.skill_id,
+            "proficiency": updated_assignment.proficiency.value,
+        },
+    )
+    session.commit()
 
     return {
         "employee_id": updated_assignment.employee_id,
@@ -228,4 +344,17 @@ def remove_skill_from_employee_service(
             detail="Employee does not have this skill assigned",
         )
 
+    record_audit_log(
+        session=session,
+        actor_employee_id=current_employee.id,
+        target_type="employee_skill",
+        target_id=target_employee.id,
+        action="remove_skill",
+        old_values={
+            "employee_id": employee_skill.employee_id,
+            "skill_id": employee_skill.skill_id,
+            "proficiency": employee_skill.proficiency.value,
+        },
+    )
     delete_employee_skill(session=session, employee_skill=employee_skill)
+    session.commit()

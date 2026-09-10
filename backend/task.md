@@ -406,7 +406,7 @@ Verify:
 
 ## Task 016 - Employee Detail By Public ID
 
-Status: pending
+Status: done
 
 Goal: Return one employee profile by public UUID.
 
@@ -437,7 +437,7 @@ Verify:
 
 ## Task 017 - List Employees With Pagination
 
-Status: pending
+Status: done
 
 Goal: Return a paginated employee directory list.
 
@@ -465,7 +465,7 @@ Verify:
 
 ## Task 018 - Employee Text Search
 
-Status: pending
+Status: done
 
 Goal: Search employees by name or email.
 
@@ -494,7 +494,7 @@ Verify:
 
 ## Task 019 - Employee Department Filter
 
-Status: pending
+Status: done
 
 Goal: Filter employees by department.
 
@@ -520,7 +520,7 @@ Verify:
 
 ## Task 020 - Employee Office Filter
 
-Status: pending
+Status: done
 
 Goal: Filter employees by office.
 
@@ -545,7 +545,7 @@ Verify:
 
 ## Task 021 - Employee Work Mode Filter
 
-Status: pending
+Status: done
 
 Goal: Filter employees by work mode.
 
@@ -570,7 +570,7 @@ Verify:
 
 ## Task 022 - Employee Collaboration Status Filter
 
-Status: pending
+Status: done
 
 Goal: Filter employees by collaboration status.
 
@@ -595,7 +595,7 @@ Verify:
 
 ## Task 023 - Employee Skill Filter
 
-Status: pending
+Status: done
 
 Goal: Find employees with a specific skill.
 
@@ -622,7 +622,7 @@ Verify:
 
 ## Task 024 - Employee Skill And Proficiency Filter
 
-Status: pending
+Status: done
 
 Goal: Find employees with a skill at a required proficiency.
 
@@ -908,18 +908,20 @@ Implement:
 - Add deactivate endpoint.
 - Require HR Admin.
 - Repository updates `is_active`.
+- Reassign a deactivated manager's direct reports to that manager's manager.
 - Do not delete employees.
 
 Verify:
 
 - HR Admin deactivates employee.
+- Direct reports retain hierarchy through the deactivated manager's manager.
 - Deactivated employee cannot login.
 - HR Admin reactivates employee.
 - Reactivated employee can login.
 
 ## Task 035 - List Departments
 
-Status: pending
+Status: done
 
 Goal: Return all departments.
 
@@ -994,7 +996,7 @@ Verify:
 
 ## Task 038 - Delete Department
 
-Status: pending
+Status: done
 
 Goal: Allow safe department deletion.
 
@@ -1004,6 +1006,8 @@ Files:
 - `backend/services/departmentService.py`
 - `backend/repos/departmentRepo.py`
 - `backend/repos/employeeRepo.py`
+- `backend/models/department.py`
+- `backend/dto/departmentDto.py`
 
 Implement:
 
@@ -1011,17 +1015,17 @@ Implement:
 - Service checks department exists.
 - Service checks whether employees reference department.
 - Block deletion when department is in use.
-- Repository deletes unused department.
+- Deletion is a soft delete: sets `is_active` to false instead of removing the row.
 
 Verify:
 
-- Delete unused department succeeds.
-- Delete department with employees fails.
+- Delete unused department succeeds and sets `is_active` to false.
+- Delete department with employees fails with 409.
 - Missing department returns 404.
 
 ## Task 039 - List Offices
 
-Status: pending
+Status: done
 
 Goal: Return all offices.
 
@@ -1096,7 +1100,7 @@ Verify:
 
 ## Task 042 - Delete Office
 
-Status: pending
+Status: done
 
 Goal: Allow safe office deletion.
 
@@ -1106,6 +1110,8 @@ Files:
 - `backend/services/officeService.py`
 - `backend/repos/officeRepo.py`
 - `backend/repos/employeeRepo.py`
+- `backend/models/office.py`
+- `backend/dto/officeDto.py`
 
 Implement:
 
@@ -1113,17 +1119,17 @@ Implement:
 - Service checks office exists.
 - Service checks whether employees reference office.
 - Block deletion when office is in use.
-- Repository deletes unused office.
+- Deletion is a soft delete: sets `is_active` to false instead of removing the row.
 
 Verify:
 
-- Delete unused office succeeds.
-- Delete office with employees fails.
+- Delete unused office succeeds and sets `is_active` to false.
+- Delete office with employees fails with 409.
 - Missing office returns 404.
 
 ## Task 043 - List Skills
 
-Status: pending
+Status: done
 
 Goal: Return standardized skills.
 
@@ -1199,7 +1205,7 @@ Verify:
 
 ## Task 046 - Delete Skill
 
-Status: pending
+Status: done
 
 Goal: Allow safe skill deletion.
 
@@ -1226,7 +1232,7 @@ Verify:
 
 ## Task 047 - Get Employee Skills
 
-Status: pending
+Status: done
 
 Goal: Return skills and proficiency for one employee.
 
@@ -1337,7 +1343,7 @@ Verify:
 
 ## Task 051 - Audit Employee Creation
 
-Status: pending
+Status: completed
 
 Goal: Write an audit log when an employee is created.
 
@@ -1346,6 +1352,7 @@ Files:
 - `backend/services/employeeService.py`
 - `backend/services/auditService.py`
 - `backend/repos/auditRepo.py`
+- `backend/routers/adminRouter.py`
 
 Implement:
 
@@ -1365,7 +1372,7 @@ Verify:
 
 ## Task 052 - Audit Employee Profile Update
 
-Status: pending
+Status: done
 
 Goal: Write an audit log when safe employee profile fields change.
 
@@ -1390,7 +1397,7 @@ Verify:
 
 ## Task 053 - Audit Role Change
 
-Status: pending
+Status: done
 
 Goal: Write an audit log when HR Admin changes employee role.
 
@@ -1415,7 +1422,7 @@ Verify:
 
 ## Task 054 - Audit Manager Change
 
-Status: pending
+Status: done
 
 Goal: Write an audit log when HR Admin changes an employee's manager.
 
@@ -1439,7 +1446,7 @@ Verify:
 
 ## Task 055 - Audit Employee Skill Change
 
-Status: pending
+Status: done
 
 Goal: Write audit logs for employee skill assignment, removal, and proficiency update.
 
@@ -1465,7 +1472,7 @@ Verify:
 
 ## Task 056 - Audit Department Changes
 
-Status: pending
+Status: done
 
 Goal: Write audit logs for department create, update, and delete.
 
@@ -1490,7 +1497,7 @@ Verify:
 
 ## Task 057 - Audit Office Changes
 
-Status: pending
+Status: done
 
 Goal: Write audit logs for office create, update, and delete.
 
@@ -1541,7 +1548,7 @@ Verify:
 
 ## Task 059 - List Audit Logs
 
-Status: pending
+Status: done
 
 Goal: Allow HR Admins to view audit history.
 

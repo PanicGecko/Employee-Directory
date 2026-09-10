@@ -10,16 +10,20 @@ from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from fastapi.responses import JSONResponse
 from database import create_db_and_tables
 from routers.adminRouter import router as admin_router
+from routers.auditRouter import router as audit_router
 from routers.authRouter import router as auth_router
 from routers.departmentRouter import router as department_router
 from routers.employeeRouter import router as employee_router
 from routers.officeRouter import router as office_router
 from routers.skillRouter import router as skill_router
+from seed_admin import seed_admin_user
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     create_db_and_tables()
+    seed_admin_user()
+
     yield
 
 
@@ -97,3 +101,4 @@ app.include_router(admin_router)
 app.include_router(department_router)
 app.include_router(office_router)
 app.include_router(skill_router)
+app.include_router(audit_router)

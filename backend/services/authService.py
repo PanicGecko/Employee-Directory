@@ -193,3 +193,24 @@ def refresh_employee_tokens(
     session.commit()
 
     return token_data
+
+
+def logout_employee(session: Session, refresh_token: str) -> None:
+    try:
+        payload = decode_token(refresh_token)
+    except HTTPException:
+        return
+
+    if payload.get("type") != "refresh" or not payload.get("sub"):
+        return
+
+    stored_token = get_refresh_token_by_hash(
+        session=session,
+        token_hash=hash_refresh_token(refresh_token),
+    )
+
+    if stored_token is None:
+        return
+
+    delete_refresh_token_record(session, stored_token)
+    session.commit()

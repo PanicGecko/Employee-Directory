@@ -18,10 +18,10 @@ def create_employee(
     session: SessionDep,
     current_admin: HRAdminEmployeeDep,
 ):
-    del current_admin
     employee = create_employee_service(
         session=session,
         employee_data=employee_request,
+        actor_employee=current_admin,
     )
 
     return ResponseDTO(

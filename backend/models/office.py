@@ -14,5 +14,6 @@ class Office(SQLModel, table=True):
     state: Optional[str] = Field(default=None, max_length=100)
     zip_code: Optional[str] = Field(default=None, max_length=20)
     country: str = Field(max_length=100, nullable=False)
+    is_active: bool = Field(default=True, nullable=False)
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
     updated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
