@@ -168,6 +168,53 @@ def update_department_service(
     )
 
 
+def reactivate_department_service(
+    session,
+    department_id: int,
+    actor_employee_id: int,
+) -> DepartmentResponse:
+    department = get_department_by_id(session=session, department_id=department_id)
+    if department is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Department not found",
+        )
+
+    if department.is_active:
+        return DepartmentResponse(
+            id=department.id,
+            name=department.name,
+            description=department.description,
+            is_active=department.is_active,
+            created_at=department.created_at,
+            updated_at=department.updated_at,
+        )
+
+    department.is_active = True
+    department.updated_at = datetime.utcnow()
+
+    reactivated_department = update_department(session=session, department=department)
+    record_audit_log(
+        session=session,
+        actor_employee_id=actor_employee_id,
+        target_type="department",
+        target_id=reactivated_department.id,
+        action="reactivate",
+        old_values={"is_active": False},
+        new_values={"is_active": reactivated_department.is_active},
+    )
+    session.commit()
+
+    return DepartmentResponse(
+        id=reactivated_department.id,
+        name=reactivated_department.name,
+        description=reactivated_department.description,
+        is_active=reactivated_department.is_active,
+        created_at=reactivated_department.created_at,
+        updated_at=reactivated_department.updated_at,
+    )
+
+
 def delete_department_service(
     session,
     department_id: int,

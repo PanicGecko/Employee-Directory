@@ -6,8 +6,8 @@ import Field from '../components/Field'
 import PageHeader from '../components/PageHeader'
 import {
   loadOffices,
-  removeOffice,
   saveOffice,
+  setOfficeActive,
 } from '../store/thunks/directoryThunks'
 
 const emptyOffice = {
@@ -98,7 +98,7 @@ function OfficesPage() {
 
     setMessage('')
     setIsDeleting(true)
-    const result = await dispatch(removeOffice(officeToDeactivate.id))
+    const result = await dispatch(setOfficeActive(officeToDeactivate.id, false))
     setIsDeleting(false)
     setOfficeToDeactivate(null)
     setMessage(
@@ -106,6 +106,17 @@ function OfficesPage() {
         ? 'Office deactivated.'
         : result.error ||
             'Unable to deactivate office. It may still be assigned to employees.',
+    )
+  }
+
+  async function handleReactivate(office) {
+    setMessage('')
+    const result = await dispatch(setOfficeActive(office.id, true))
+
+    setMessage(
+      result.ok
+        ? 'Office reactivated.'
+        : result.error || 'Unable to reactivate office.',
     )
   }
 
@@ -199,14 +210,23 @@ function OfficesPage() {
                         >
                           Edit
                         </button>
-                        <button
-                          type="button"
-                          className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 transition hover:border-rose-200 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-50"
-                          disabled={!office.is_active}
-                          onClick={() => setOfficeToDeactivate(office)}
-                        >
-                          Deactivate
-                        </button>
+                        {office.is_active ? (
+                          <button
+                            type="button"
+                            className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 transition hover:border-rose-200 hover:text-rose-600"
+                            onClick={() => setOfficeToDeactivate(office)}
+                          >
+                            Deactivate
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-100"
+                            onClick={() => handleReactivate(office)}
+                          >
+                            Reactivate
+                          </button>
+                        )}
                       </div>
                     ) : null}
                   </article>

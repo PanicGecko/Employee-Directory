@@ -289,3 +289,58 @@ def delete_office_service(
         created_at=deactivated_office.created_at,
         updated_at=deactivated_office.updated_at,
     )
+
+
+def reactivate_office_service(
+    session,
+    office_id: int,
+    actor_employee_id: int,
+) -> OfficeResponse:
+    office = get_office_by_id(session=session, office_id=office_id)
+    if office is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Office not found",
+        )
+
+    if office.is_active:
+        return OfficeResponse(
+            id=office.id,
+            name=office.name,
+            street_address=office.street_address,
+            city=office.city,
+            state=office.state,
+            zip_code=office.zip_code,
+            country=office.country,
+            is_active=office.is_active,
+            created_at=office.created_at,
+            updated_at=office.updated_at,
+        )
+
+    office.is_active = True
+    office.updated_at = datetime.utcnow()
+
+    reactivated_office = update_office(session=session, office=office)
+    record_audit_log(
+        session=session,
+        actor_employee_id=actor_employee_id,
+        target_type="office",
+        target_id=reactivated_office.id,
+        action="reactivate",
+        old_values={"is_active": False},
+        new_values={"is_active": reactivated_office.is_active},
+    )
+    session.commit()
+
+    return OfficeResponse(
+        id=reactivated_office.id,
+        name=reactivated_office.name,
+        street_address=reactivated_office.street_address,
+        city=reactivated_office.city,
+        state=reactivated_office.state,
+        zip_code=reactivated_office.zip_code,
+        country=reactivated_office.country,
+        is_active=reactivated_office.is_active,
+        created_at=reactivated_office.created_at,
+        updated_at=reactivated_office.updated_at,
+    )

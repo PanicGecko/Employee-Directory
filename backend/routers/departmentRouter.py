@@ -9,6 +9,7 @@ from services.departmentService import (
     delete_department_service,
     list_active_departments_service,
     list_departments_service,
+    reactivate_department_service,
     update_department_service,
 )
 
@@ -103,5 +104,24 @@ def delete_department(
     return ResponseDTO(
         status_code=200,
         msg="Department deleted successfully",
+        data=department.model_dump(mode="json"),
+    ).to_response()
+
+
+@router.patch("/{department_id}/activate")
+def reactivate_department(
+    department_id: int,
+    session: SessionDep,
+    current_admin: HRAdminEmployeeDep,
+):
+    department = reactivate_department_service(
+        session=session,
+        department_id=department_id,
+        actor_employee_id=current_admin.id,
+    )
+
+    return ResponseDTO(
+        status_code=200,
+        msg="Department reactivated successfully",
         data=department.model_dump(mode="json"),
     ).to_response()

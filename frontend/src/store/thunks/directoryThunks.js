@@ -2,6 +2,7 @@ import {
   createDepartment,
   deleteDepartment,
   listDepartments,
+  reactivateDepartment,
   updateDepartment,
 } from '../../apis/departmentsApi'
 import {
@@ -17,6 +18,7 @@ import {
   createOffice,
   deleteOffice,
   listOffices,
+  reactivateOffice,
   updateOffice,
 } from '../../apis/officesApi'
 import {
@@ -194,6 +196,24 @@ export function removeDepartment(departmentId) {
   }
 }
 
+export function setDepartmentActive(departmentId, isActive) {
+  return async (dispatch) => {
+    try {
+      const data = isActive
+        ? await reactivateDepartment(departmentId)
+        : await deleteDepartment(departmentId)
+      await dispatch(loadDepartments())
+
+      return { ok: true, data }
+    } catch (error) {
+      return {
+        ok: false,
+        error: getApiErrorMessage(error, 'Unable to update department status.'),
+      }
+    }
+  }
+}
+
 export function loadOffices() {
   return async (dispatch) => {
     dispatch(officesStarted())
@@ -236,6 +256,24 @@ export function removeOffice(officeId) {
       return { ok: true, data }
     } catch (error) {
       return { ok: false, error: getApiErrorMessage(error, 'Unable to delete office.') }
+    }
+  }
+}
+
+export function setOfficeActive(officeId, isActive) {
+  return async (dispatch) => {
+    try {
+      const data = isActive
+        ? await reactivateOffice(officeId)
+        : await deleteOffice(officeId)
+      await dispatch(loadOffices())
+
+      return { ok: true, data }
+    } catch (error) {
+      return {
+        ok: false,
+        error: getApiErrorMessage(error, 'Unable to update office status.'),
+      }
     }
   }
 }

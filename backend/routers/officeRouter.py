@@ -9,6 +9,7 @@ from services.officeService import (
     delete_office_service,
     list_active_offices_service,
     list_offices_service,
+    reactivate_office_service,
     update_office_service,
 )
 
@@ -103,5 +104,24 @@ def delete_office(
     return ResponseDTO(
         status_code=200,
         msg="Office deleted successfully",
+        data=office.model_dump(mode="json"),
+    ).to_response()
+
+
+@router.patch("/{office_id}/activate")
+def reactivate_office(
+    office_id: int,
+    session: SessionDep,
+    current_admin: HRAdminEmployeeDep,
+):
+    office = reactivate_office_service(
+        session=session,
+        office_id=office_id,
+        actor_employee_id=current_admin.id,
+    )
+
+    return ResponseDTO(
+        status_code=200,
+        msg="Office reactivated successfully",
         data=office.model_dump(mode="json"),
     ).to_response()

@@ -6,8 +6,8 @@ import Field from '../components/Field'
 import PageHeader from '../components/PageHeader'
 import {
   loadDepartments,
-  removeDepartment,
   saveDepartment,
+  setDepartmentActive,
 } from '../store/thunks/directoryThunks'
 
 const emptyDepartment = { description: '', name: '' }
@@ -79,7 +79,9 @@ function DepartmentsPage() {
 
     setMessage('')
     setIsDeleting(true)
-    const result = await dispatch(removeDepartment(departmentToDeactivate.id))
+    const result = await dispatch(
+      setDepartmentActive(departmentToDeactivate.id, false),
+    )
     setIsDeleting(false)
     setDepartmentToDeactivate(null)
     setMessage(
@@ -87,6 +89,17 @@ function DepartmentsPage() {
         ? 'Department deactivated.'
         : result.error ||
             'Unable to deactivate department. It may still be assigned to employees.',
+    )
+  }
+
+  async function handleReactivate(department) {
+    setMessage('')
+    const result = await dispatch(setDepartmentActive(department.id, true))
+
+    setMessage(
+      result.ok
+        ? 'Department reactivated.'
+        : result.error || 'Unable to reactivate department.',
     )
   }
 
@@ -183,14 +196,23 @@ function DepartmentsPage() {
                         >
                           Edit
                         </button>
-                        <button
-                          type="button"
-                          className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 transition hover:border-rose-200 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-50"
-                          disabled={!department.is_active}
-                          onClick={() => setDepartmentToDeactivate(department)}
-                        >
-                          Deactivate
-                        </button>
+                        {department.is_active ? (
+                          <button
+                            type="button"
+                            className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 transition hover:border-rose-200 hover:text-rose-600"
+                            onClick={() => setDepartmentToDeactivate(department)}
+                          >
+                            Deactivate
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-100"
+                            onClick={() => handleReactivate(department)}
+                          >
+                            Reactivate
+                          </button>
+                        )}
                       </div>
                     ) : null}
                   </article>

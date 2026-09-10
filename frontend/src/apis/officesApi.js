@@ -29,3 +29,9 @@ export async function deleteOffice(officeId) {
 
   return response.data.data
 }
+
+export async function reactivateOffice(officeId) {
+  const response = await apiClient.patch(`/offices/${officeId}/activate`)
+
+  return response.data.data
+}

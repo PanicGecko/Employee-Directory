@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
-import { listEmployees } from '../apis/employeesApi'
+import { assignEmployeeManager, listEmployees } from '../apis/employeesApi'
 import AppShell from '../components/AppShell'
 import Field from '../components/Field'
 import PageHeader from '../components/PageHeader'
@@ -10,6 +10,7 @@ import {
   loadDepartments,
   loadOffices,
 } from '../store/thunks/directoryThunks'
+import { getApiErrorMessage } from '../utils/apiError'
 import { formatRole, getEmployeeName } from '../utils/employeeUtils'
 
 const roleOptions = ['employee', 'manager', 'hr_admin']
@@ -24,7 +25,7 @@ const emptyEmployee = {
   email: '',
   first_name: '',
   last_name: '',
-  manager_id: '',
+  manager_public_id: '',
   office_id: '',
   password: '',
   phone: '',
@@ -57,7 +58,6 @@ function buildCreatePayload(form) {
     email: form.email.trim(),
     first_name: form.first_name.trim(),
     last_name: form.last_name.trim(),
-    manager_id: form.manager_id,
     office_id: form.office_id,
     password: form.password,
     phone: form.phone,
@@ -155,8 +155,26 @@ function AdminEmployeesPage() {
       return
     }
 
+    if (form.manager_public_id) {
+      try {
+        await assignEmployeeManager(result.data.public_id, form.manager_public_id)
+      } catch (error) {
+        setMessage(
+          `Employee profile created, but manager assignment failed: ${getApiErrorMessage(
+            error,
+            'Unable to assign manager.',
+          )}`,
+        )
+        return
+      }
+    }
+
     setForm(emptyEmployee)
-    setMessage('Employee profile created.')
+    setMessage(
+      form.manager_public_id
+        ? 'Employee profile created and manager assigned.'
+        : 'Employee profile created.',
+    )
   }
 
   return (
@@ -211,12 +229,14 @@ function AdminEmployeesPage() {
             </SelectField>
             <SelectField
               label="Manager"
-              value={form.manager_id}
-              onChange={(event) => updateField('manager_id', event.target.value)}
+              value={form.manager_public_id}
+              onChange={(event) =>
+                updateField('manager_public_id', event.target.value)
+              }
             >
               <option value="">No manager</option>
               {managers.map((manager) => (
-                <option key={manager.public_id} value={manager.id}>
+                <option key={manager.public_id} value={manager.public_id}>
                   {getEmployeeName(manager)}
                 </option>
               ))}

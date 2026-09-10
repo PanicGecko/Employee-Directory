@@ -219,6 +219,13 @@ Planning only. Backend files were inspected for real API contracts; do not modif
   - Response data: deactivated department.
   - Notes: `409` if assigned to employees.
 
+- [x] `PATCH /departments/{department_id}/activate`
+  - Purpose: reactivate an inactive department.
+  - Used by: HR admin controls on `/departments`.
+  - Auth: bearer required.
+  - Roles: `hr_admin`.
+  - Response data: reactivated department.
+
 ### Offices
 
 - [x] `GET /offices`
@@ -258,6 +265,13 @@ Planning only. Backend files were inspected for real API contracts; do not modif
   - Roles: `hr_admin`.
   - Response data: deactivated office.
   - Notes: `409` if assigned to employees.
+
+- [x] `PATCH /offices/{office_id}/activate`
+  - Purpose: reactivate an inactive office.
+  - Used by: HR admin controls on `/offices`.
+  - Auth: bearer required.
+  - Roles: `hr_admin`.
+  - Response data: reactivated office.
 
 ### Skills
 
@@ -392,17 +406,17 @@ Planning only. Backend files were inspected for real API contracts; do not modif
 
 - [x] Departments
   - Route: `/departments`
-  - Purpose: view department catalog; HR admin create/edit/deactivate.
+  - Purpose: view department catalog; HR admin create/edit/deactivate/reactivate.
   - Access: read for all roles; write for `hr_admin`.
-  - APIs: `GET /departments`, `POST /departments`, `PATCH /departments/{id}`, `DELETE /departments/{id}`.
+  - APIs: `GET /departments`, `POST /departments`, `PATCH /departments/{id}`, `DELETE /departments/{id}`, `PATCH /departments/{id}/activate`.
   - Components: list/cards/table, inline form or modal, confirmation dialog.
   - States: loading, empty, error, `409` cannot delete assigned department.
 
 - [x] Offices
   - Route: `/offices`
-  - Purpose: view office catalog; HR admin create/edit/deactivate.
+  - Purpose: view office catalog; HR admin create/edit/deactivate/reactivate.
   - Access: read for all roles; write for `hr_admin`.
-  - APIs: `GET /offices`, `POST /offices`, `PATCH /offices/{id}`, `DELETE /offices/{id}`.
+  - APIs: `GET /offices`, `POST /offices`, `PATCH /offices/{id}`, `DELETE /offices/{id}`, `PATCH /offices/{id}/activate`.
   - Components: list/cards/table, form/modal, confirmation dialog.
   - States: loading, empty, error, `409` cannot delete assigned office.
 
@@ -591,7 +605,7 @@ Planning only. Backend files were inspected for real API contracts; do not modif
   - Implementation needed: none.
 
 - [x] HR admin can manage departments/offices/skills.
-  - Backend: department/office/skill create/update/delete endpoints
+  - Backend: department/office/skill create/update/delete endpoints, plus department/office reactivate endpoints
   - Frontend: `/departments`, `/offices`, `/skills`
   - Role: `hr_admin`
   - Implementation needed: none for catalog management.

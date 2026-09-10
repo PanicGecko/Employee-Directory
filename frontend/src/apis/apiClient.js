@@ -1,6 +1,8 @@
 import axios from 'axios'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api'
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL ||
+  'https://d2ly1oxqqhxsa1.cloudfront.net/api/employee-directory'
 const AUTH_CHANGED_EVENT = 'employee-directory-auth-changed'
 
 const apiClient = axios.create({

@@ -29,3 +29,9 @@ export async function deleteDepartment(departmentId) {
 
   return response.data.data
 }
+
+export async function reactivateDepartment(departmentId) {
+  const response = await apiClient.patch(`/departments/${departmentId}/activate`)
+
+  return response.data.data
+}
